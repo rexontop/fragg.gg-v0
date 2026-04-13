@@ -48,6 +48,11 @@ function extractSteamID(claimedID: string): string | null {
 }
 
 async function getSteamUserInfo(steamID: string) {
+  if (!STEAM_API_KEY) {
+    console.error("Missing STEAM_API_KEY in Edge Function Secrets")
+    return null
+  }
+  
   const response = await fetch(
     `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${steamID}`,
     {
@@ -81,10 +86,14 @@ Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url)
     const params = url.searchParams
+    // Normalize path to handle /v1/ and trailing slashes
+    const cleanPath = url.pathname.replace(/\/$/, "")
 
-    if (req.method === "GET" && url.pathname === "/functions/v1/steam-auth") {
-      // Initiate login
-      const returnTo = params.get("return_to") || `${url.origin}/auth/callback`
+    // LOGIN ROUTE
+    if (req.method === "GET" && cleanPath.endsWith("/steam-auth")) {
+      // Direct redirect for better browser compatibility
+      const returnTo = params.get("return_to") || `https://fragg.xyz/auth/callback`
+      
       const loginParams = new URLSearchParams()
       loginParams.append("openid.ns", "http://specs.openid.net/auth/2.0")
       loginParams.append("openid.identity", "http://specs.openid.net/auth/2.0/identifier_select")
@@ -92,24 +101,15 @@ Deno.serve(async (req: Request) => {
       loginParams.append("openid.mode", "checkid_setup")
       loginParams.append("openid.return_to", returnTo)
       loginParams.append("openid.realm", new URL(returnTo).origin)
-      loginParams.append("openid.response_nonce", new Date().toISOString())
-      loginParams.append("openid.assoc_handle", "{HMAC-SHA1}{" + Date.now() + "}{random}")
 
       const loginUrl = `${STEAM_API_URL}?${loginParams.toString()}`
 
-      return new Response(
-        JSON.stringify({ login_url: loginUrl }),
-        {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
-      )
+      // SERVER-SIDE REDIRECT (Fixes about:blank#blocked)
+      return Response.redirect(loginUrl, 302)
     }
 
-    if (req.method === "POST" && url.pathname === "/functions/v1/steam-auth/verify") {
-      // Verify Steam response
+    // VERIFY ROUTE
+    if (req.method === "POST" && cleanPath.endsWith("/verify")) {
       const body = await req.json() as Record<string, unknown>
       const openidParams = new URLSearchParams()
 
@@ -124,13 +124,7 @@ Deno.serve(async (req: Request) => {
       if (!isValid) {
         return new Response(
           JSON.stringify({ error: "Steam verification failed" }),
-          {
-            status: 401,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-            },
-          }
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         )
       }
 
@@ -140,13 +134,7 @@ Deno.serve(async (req: Request) => {
       if (!steamID) {
         return new Response(
           JSON.stringify({ error: "Invalid Steam ID" }),
-          {
-            status: 400,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-            },
-          }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         )
       }
 
@@ -155,13 +143,7 @@ Deno.serve(async (req: Request) => {
       if (!userInfo) {
         return new Response(
           JSON.stringify({ error: "Failed to retrieve Steam user info" }),
-          {
-            status: 500,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-            },
-          }
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         )
       }
 
@@ -171,35 +153,25 @@ Deno.serve(async (req: Request) => {
           username: userInfo.username,
           avatar: userInfo.avatar,
         }),
-        {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
 
+    // NOT FOUND FALLBACK
     return new Response(
-      JSON.stringify({ error: "Not found" }),
+      JSON.stringify({ error: "Not found", path: cleanPath }),
       {
         status: 404,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     )
   } catch (error) {
     console.error("Steam auth error:", error)
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
+      JSON.stringify({ error: "Internal server error", details: error.message }),
       {
         status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     )
   }
