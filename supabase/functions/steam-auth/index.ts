@@ -48,6 +48,11 @@ function extractSteamID(claimedID: string): string | null {
 }
 
 async function getSteamUserInfo(steamID: string) {
+  if (!STEAM_API_KEY) {
+    console.error("STEAM_API_KEY is not set in Supabase Secrets")
+    return null
+  }
+
   const response = await fetch(
     `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${steamID}`,
     {
@@ -58,7 +63,12 @@ async function getSteamUserInfo(steamID: string) {
     }
   )
 
-  const data = await response.json() as { response: { players: Array<{ personaname: string; avatarfull: string }> } }
+  const data = await response.json() as { 
+    response: { 
+      players: Array<{ personaname: string; avatarfull: string }> 
+    } 
+  }
+  
   const players = data.response.players
   if (players && players.length > 0) {
     return {
@@ -71,7 +81,7 @@ async function getSteamUserInfo(steamID: string) {
 }
 
 Deno.serve(async (req: Request) => {
-  // Handle CORS
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
@@ -82,11 +92,11 @@ Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url)
     const params = url.searchParams
-    // Normalize the path by removing trailing slashes
-    const cleanPath = url.pathname.replace(/\/$/, "")
+    const path = url.pathname
 
-    // LOGIN ROUTE: Matches if the URL ends in /steam-auth
-    if (req.method === "GET" && cleanPath.endsWith("/steam-auth")) {
+    // 1. LOGIN ROUTE (Triggered when user clicks the Steam button)
+    // We check if the path contains steam-auth to avoid /v1/ routing issues
+    if (req.method === "GET" && path.includes("steam-auth") && !path.includes("verify")) {
       const returnTo = params.get("return_to") || `https://fragg.xyz/auth/callback`
       
       const loginParams = new URLSearchParams()
@@ -96,15 +106,17 @@ Deno.serve(async (req: Request) => {
       loginParams.append("openid.mode", "checkid_setup")
       loginParams.append("openid.return_to", returnTo)
       loginParams.append("openid.realm", new URL(returnTo).origin)
+      loginParams.append("openid.response_nonce", new Date().toISOString())
+      loginParams.append("openid.assoc_handle", "{HMAC-SHA1}{" + Date.now() + "}{random}")
 
       const loginUrl = `${STEAM_API_URL}?${loginParams.toString()}`
 
-      // DIRECT REDIRECT (Fixes about:blank#blocked)
+      // Force a redirect to Steam
       return Response.redirect(loginUrl, 302)
     }
 
-    // VERIFY ROUTE: Matches if the URL ends in /verify
-    if (req.method === "POST" && cleanPath.endsWith("/verify")) {
+    // 2. VERIFY ROUTE (Triggered by your frontend after Steam sends the user back)
+    if (req.method === "POST" && path.includes("verify")) {
       const body = await req.json() as Record<string, unknown>
       const openidParams = new URLSearchParams()
 
@@ -119,9 +131,9 @@ Deno.serve(async (req: Request) => {
       if (!isValid) {
         return new Response(
           JSON.stringify({ error: "Steam verification failed" }),
-          { 
-            status: 401, 
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         )
       }
@@ -132,9 +144,9 @@ Deno.serve(async (req: Request) => {
       if (!steamID) {
         return new Response(
           JSON.stringify({ error: "Invalid Steam ID" }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         )
       }
@@ -144,9 +156,9 @@ Deno.serve(async (req: Request) => {
       if (!userInfo) {
         return new Response(
           JSON.stringify({ error: "Failed to retrieve Steam user info" }),
-          { 
-            status: 500, 
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         )
       }
@@ -157,19 +169,18 @@ Deno.serve(async (req: Request) => {
           username: userInfo.username,
           avatar: userInfo.avatar,
         }),
-        { 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       )
     }
 
-    // This is where your old code was failing. 
-    // It would fall through to here if the pathname didn't match perfectly.
+    // Fallback if no routes match
     return new Response(
       JSON.stringify({ 
         error: "Not found", 
-        receivedPath: url.pathname, 
-        hint: "Make sure your request ends with /steam-auth or /verify" 
+        path: path,
+        method: req.method 
       }),
       {
         status: 404,
