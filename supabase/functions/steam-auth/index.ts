@@ -49,7 +49,7 @@ function extractSteamID(claimedID: string): string | null {
 
 async function getSteamUserInfo(steamID: string) {
   if (!STEAM_API_KEY) {
-    console.error("STEAM_API_KEY is not set in Supabase Secrets")
+    console.error("STEAM_API_KEY is missing from secrets.")
     return null
   }
 
@@ -63,12 +63,7 @@ async function getSteamUserInfo(steamID: string) {
     }
   )
 
-  const data = await response.json() as { 
-    response: { 
-      players: Array<{ personaname: string; avatarfull: string }> 
-    } 
-  }
-  
+  const data = await response.json() as { response: { players: Array<{ personaname: string; avatarfull: string }> } }
   const players = data.response.players
   if (players && players.length > 0) {
     return {
@@ -81,7 +76,6 @@ async function getSteamUserInfo(steamID: string) {
 }
 
 Deno.serve(async (req: Request) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
@@ -92,13 +86,11 @@ Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url)
     const params = url.searchParams
-    const path = url.pathname
+    const pathname = url.pathname
 
-    // 1. LOGIN ROUTE (Triggered when user clicks the Steam button)
-    // We check if the path contains steam-auth to avoid /v1/ routing issues
-    if (req.method === "GET" && path.includes("steam-auth") && !path.includes("verify")) {
+    // LOGIN ROUTE: Now using .endsWith() to fix the 404 error
+    if (req.method === "GET" && pathname.endsWith("/steam-auth")) {
       const returnTo = params.get("return_to") || `https://fragg.xyz/auth/callback`
-      
       const loginParams = new URLSearchParams()
       loginParams.append("openid.ns", "http://specs.openid.net/auth/2.0")
       loginParams.append("openid.identity", "http://specs.openid.net/auth/2.0/identifier_select")
@@ -111,12 +103,12 @@ Deno.serve(async (req: Request) => {
 
       const loginUrl = `${STEAM_API_URL}?${loginParams.toString()}`
 
-      // Force a redirect to Steam
+      // DIRECT REDIRECT: Fixed about:blank by sending user directly
       return Response.redirect(loginUrl, 302)
     }
 
-    // 2. VERIFY ROUTE (Triggered by your frontend after Steam sends the user back)
-    if (req.method === "POST" && path.includes("verify")) {
+    // VERIFY ROUTE: Using .endsWith() for reliability
+    if (req.method === "POST" && pathname.endsWith("/verify")) {
       const body = await req.json() as Record<string, unknown>
       const openidParams = new URLSearchParams()
 
@@ -175,13 +167,9 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // Fallback if no routes match
+    // The Fallback that was triggering in your screenshot
     return new Response(
-      JSON.stringify({ 
-        error: "Not found", 
-        path: path,
-        method: req.method 
-      }),
+      JSON.stringify({ error: "Not found", path: pathname }),
       {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
