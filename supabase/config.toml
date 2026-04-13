@@ -1,4 +1,0 @@
-project_id = "rfhszhfatgcyphiwrmzb"
-
-[functions.steam-auth]
-verify_jwt = false
