@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { LeaderboardTable } from "@/components/leaderboard-table"
+import { Navbar } from "@/components/navbar"
 import { Trophy, Medal, TrendingUp } from "lucide-react"
 
 export const metadata = {
@@ -19,7 +20,9 @@ export default async function LeaderboardPage() {
   const topPlayers = players || []
 
   return (
-    <div className="min-h-screen px-4 pb-16 pt-24">
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <div className="px-4 pb-16 pt-24">
       <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div className="mb-8">
@@ -98,6 +101,7 @@ export default async function LeaderboardPage() {
 
         {/* Full Table */}
         <LeaderboardTable players={topPlayers} />
+      </div>
       </div>
     </div>
   )
