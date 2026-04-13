@@ -2,6 +2,9 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Trophy, Target, Users, TrendingUp, Crosshair, ChevronRight, Zap, Shield, BarChart3 } from "lucide-react"
 
+// YOUR CONFIG: Replace [YOUR-PROJECT-REF] with your actual Supabase Project ID
+const STEAM_AUTH_URL = "https://rfhszhfatgcyphiwrmzb.supabase.co/functions/v1/steam-auth"
+
 const features = [
   {
     icon: Trophy,
@@ -76,12 +79,12 @@ export default function HomePage() {
             and climb the ranks with FRAGG.GG&apos;s competitive leaderboards.
           </p>
 
-          {/* CTA Buttons */}
+          {/* CTA Buttons - UPDATED FOR STEAM AUTH */}
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button size="lg" className="gap-2 px-8" asChild>
-              <Link href="/auth/sign-up">
+              <Link href={STEAM_AUTH_URL}>
                 <Target className="h-5 w-5" />
-                Start Tracking
+                Login with Steam
               </Link>
             </Button>
             <Button size="lg" variant="outline" className="gap-2 px-8" asChild>
@@ -161,9 +164,9 @@ export default function HomePage() {
             Join thousands of players already tracking their CS2 journey with FRAGG.GG
           </p>
           <Button size="lg" className="gap-2 px-8" asChild>
-            <Link href="/auth/sign-up">
+            <Link href={STEAM_AUTH_URL}>
               <TrendingUp className="h-5 w-5" />
-              Create Free Account
+              Sign Up with Steam
             </Link>
           </Button>
         </div>
