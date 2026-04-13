@@ -1,9 +1,9 @@
 "use client"
 
-import { createClient } from "@/lib/supabase/client"
+import { initiateSteamLogin } from "@/lib/steam-auth"
 import { useState } from "react"
 import Link from "next/link"
-import { Crosshair, Loader2 } from "lucide-react"
+import { Crosshair, Loader as Loader2 } from "lucide-react"
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -13,20 +13,11 @@ export default function LoginPage() {
     setIsLoading(true)
     setError(null)
 
-    const supabase = createClient()
-    
-    // Using Discord OAuth as a placeholder - in production you would use Steam OpenID
-    // Steam requires custom integration via their Web API
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "discord",
-      options: {
-        redirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ?? 
-          `${window.location.origin}/auth/callback`,
-      },
-    })
-
-    if (error) {
-      setError(error.message)
+    try {
+      const loginUrl = initiateSteamLogin()
+      window.location.href = loginUrl
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to initiate Steam login")
       setIsLoading(false)
     }
   }
