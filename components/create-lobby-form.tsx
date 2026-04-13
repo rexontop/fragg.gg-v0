@@ -1,329 +1,85 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { 
-  Globe, 
-  Lock, 
-  UserCheck, 
-  MapPin, 
-  Users, 
-  Loader2,
-  ArrowLeft,
-  Crosshair,
-  Check
-} from "lucide-react"
 import Link from "next/link"
-import Image from "next/image"
+import { Crosshair, Loader2 } from "lucide-react"
 
-interface Friend {
-  id: string
-  username: string
-  avatar_url: string | null
-}
-
-interface CreateLobbyFormProps {
-  userId: string
-  skinLoadout: Record<string, { skin_id: string; skin_name: string; skin_image: string }>
-  friends: Friend[]
-}
-
-const MAPS = [
-  { id: "dust2", name: "Dust II", image: "/maps/dust2.jpg" },
-  { id: "mirage", name: "Mirage", image: "/maps/mirage.jpg" },
-  { id: "inferno", name: "Inferno", image: "/maps/inferno.jpg" },
-  { id: "nuke", name: "Nuke", image: "/maps/nuke.jpg" },
-  { id: "overpass", name: "Overpass", image: "/maps/overpass.jpg" },
-  { id: "ancient", name: "Ancient", image: "/maps/ancient.jpg" },
-  { id: "anubis", name: "Anubis", image: "/maps/anubis.jpg" },
-  { id: "vertigo", name: "Vertigo", image: "/maps/vertigo.jpg" },
-]
-
-const VISIBILITY_OPTIONS = [
-  { 
-    id: "public", 
-    name: "Public", 
-    description: "Anyone can join",
-    icon: Globe 
-  },
-  { 
-    id: "friends", 
-    name: "Friends Only", 
-    description: "Only your friends can join",
-    icon: UserCheck 
-  },
-  { 
-    id: "private", 
-    name: "Private", 
-    description: "Invite only with code",
-    icon: Lock 
-  },
-]
-
-const PLAYER_COUNTS = [2, 4, 6, 8, 10]
-
-export function CreateLobbyForm({ userId, skinLoadout, friends }: CreateLobbyFormProps) {
-  const router = useRouter()
-  const [isSubmitting, setIsSubmitting] = useState(false)
+export default function LoginPage() {
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
-  const [lobbyName, setLobbyName] = useState("")
-  const [selectedMap, setSelectedMap] = useState(MAPS[0].id)
-  const [visibility, setVisibility] = useState<"public" | "private" | "friends">("public")
-  const [maxPlayers, setMaxPlayers] = useState(10)
 
-  const skinsEquipped = Object.keys(skinLoadout).length
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
+  const handleSteamLogin = async () => {
+    setIsLoading(true)
     setError(null)
 
-    if (!lobbyName.trim()) {
-      setError("Please enter a lobby name")
-      setIsSubmitting(false)
-      return
+    try {
+      // Call our Edge Function to get the Steam login URL
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/steam-auth?return_to=${window.location.origin}/auth/callback`
+      )
+      const data = await res.json()
+
+      if (data.login_url) {
+        window.location.href = data.login_url
+      } else {
+        setError("Failed to get Steam login URL")
+        setIsLoading(false)
+      }
+    } catch (err) {
+      setError("Something went wrong. Please try again.")
+      setIsLoading(false)
     }
-
-    const supabase = createClient()
-
-    // Create the lobby
-    const { data: lobby, error: lobbyError } = await supabase
-      .from("match_lobbies")
-      .insert({
-        name: lobbyName.trim(),
-        host_id: userId,
-        map_name: selectedMap,
-        max_players: maxPlayers,
-        visibility,
-        status: "waiting",
-      })
-      .select()
-      .single()
-
-    if (lobbyError || !lobby) {
-      setError(lobbyError?.message || "Failed to create lobby")
-      setIsSubmitting(false)
-      return
-    }
-
-    // Add host as first player
-    await supabase
-      .from("lobby_players")
-      .insert({
-        lobby_id: lobby.id,
-        user_id: userId,
-        team: 1,
-      })
-
-    // Navigate to the lobby
-    router.push(`/matches/lobby/${lobby.id}`)
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link
-          href="/matches"
-          className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold">Create Match Lobby</h1>
-          <p className="text-sm text-muted-foreground">
-            Set up a custom CS2 match with your preferred settings
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-flex items-center gap-2 mb-6">
+            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+              <Crosshair className="w-5 h-5 text-primary-foreground" />
+            </div>
+            <span className="text-2xl font-bold">
+              FRAGG<span className="text-primary">.GG</span>
+            </span>
+          </Link>
+          <h1 className="text-3xl font-bold mb-2">Welcome Back</h1>
+          <p className="text-muted-foreground">Sign in with your Steam account to continue</p>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-8">
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-lg p-4 mb-6 text-sm">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={handleSteamLogin}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-3 bg-[#1b2838] hover:bg-[#2a475e] text-white font-semibold py-4 px-6 rounded-xl transition-colors disabled:opacity-50"
+          >
+            <svg viewBox="0 0 256 259" className="w-6 h-6" fill="currentColor">
+              <path d="M127.779 0C60.42 0 5.24 52.412 0 119.014l68.724 28.674a35.812 35.812 0 0 1 20.426-6.366c.682 0 1.356.019 2.02.056l30.566-44.71v-.627c0-26.903 21.69-48.796 48.353-48.796 26.663 0 48.353 21.893 48.353 48.842 0 26.95-21.69 48.843-48.353 48.843-.372 0-.738-.009-1.104-.019l-43.694 31.478c.028.544.047 1.088.047 1.641 0 20.217-16.311 36.638-36.397 36.638-17.86 0-32.77-12.995-35.858-30.178L1.201 161.79C15.654 216.679 66.095 258.003 127.779 258.003c71.24 0 128.952-58.271 128.952-130.163C256.73 55.748 199.018 0 127.78 0" />
+              <path d="M81.186 197.358l-15.575-6.494c2.756 5.732 7.453 10.505 13.559 13.245 13.196 5.92 28.633-.234 34.47-13.744 2.831-6.543 2.878-13.738.131-20.263-2.747-6.525-7.906-11.587-14.527-14.262-6.584-2.656-13.559-2.487-19.671.15l16.078 6.703c9.74 4.07 14.353 15.356 10.318 25.218-4.035 9.862-15.212 14.576-24.943 10.515l.16-.068Z" />
+              <path d="M202.705 96.044c0-17.935-14.467-32.537-32.243-32.537-17.775 0-32.242 14.602-32.242 32.537 0 17.936 14.467 32.537 32.242 32.537 17.776 0 32.243-14.601 32.243-32.537Zm-56.367.056c0-13.48 10.81-24.413 24.124-24.413 13.315 0 24.124 10.933 24.124 24.413 0 13.48-10.81 24.413-24.124 24.413-13.315 0-24.124-10.933-24.124-24.413Z" />
+            </svg>
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Connecting...
+              </>
+            ) : (
+              "Sign in with Steam"
+            )}
+          </button>
+
+          <p className="text-center text-sm text-muted-foreground mt-6">
+            By signing in, you agree to our{" "}
+            <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link>
           </p>
         </div>
       </div>
-
-      {error && (
-        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      {/* Lobby Name */}
-      <div className="space-y-2">
-        <Label htmlFor="name">Lobby Name</Label>
-        <Input
-          id="name"
-          placeholder="Enter lobby name..."
-          value={lobbyName}
-          onChange={(e) => setLobbyName(e.target.value)}
-          maxLength={50}
-        />
-      </div>
-
-      {/* Map Selection */}
-      <div className="space-y-3">
-        <Label className="flex items-center gap-2">
-          <MapPin className="h-4 w-4" />
-          Select Map
-        </Label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {MAPS.map((map) => (
-            <button
-              key={map.id}
-              type="button"
-              onClick={() => setSelectedMap(map.id)}
-              className={`relative overflow-hidden rounded-xl border-2 transition-all ${
-                selectedMap === map.id
-                  ? "border-primary ring-2 ring-primary/50"
-                  : "border-border hover:border-primary/50"
-              }`}
-            >
-              <div className="aspect-video bg-muted flex items-center justify-center">
-                <span className="text-2xl font-bold text-muted-foreground/50">
-                  {map.name.charAt(0)}
-                </span>
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-2">
-                <p className="text-sm font-medium text-white">{map.name}</p>
-              </div>
-              {selectedMap === map.id && (
-                <div className="absolute top-2 right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                  <Check className="w-4 h-4 text-primary-foreground" />
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Visibility */}
-      <div className="space-y-3">
-        <Label className="flex items-center gap-2">
-          <Lock className="h-4 w-4" />
-          Lobby Visibility
-        </Label>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {VISIBILITY_OPTIONS.map((option) => {
-            const Icon = option.icon
-            return (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => setVisibility(option.id as typeof visibility)}
-                className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-all ${
-                  visibility === option.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
-                }`}
-              >
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                  visibility === option.id ? "bg-primary text-primary-foreground" : "bg-muted"
-                }`}>
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="font-medium">{option.name}</p>
-                  <p className="text-xs text-muted-foreground">{option.description}</p>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Max Players */}
-      <div className="space-y-3">
-        <Label className="flex items-center gap-2">
-          <Users className="h-4 w-4" />
-          Max Players
-        </Label>
-        <div className="flex gap-2">
-          {PLAYER_COUNTS.map((count) => (
-            <button
-              key={count}
-              type="button"
-              onClick={() => setMaxPlayers(count)}
-              className={`flex h-12 w-12 items-center justify-center rounded-lg font-medium transition-all ${
-                maxPlayers === count
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {count}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Skin Loadout Preview */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Crosshair className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="font-medium">Your Skin Loadout</p>
-              <p className="text-sm text-muted-foreground">
-                {skinsEquipped > 0 
-                  ? `${skinsEquipped} skins equipped - will be applied in match`
-                  : "No skins equipped - using default weapons"
-                }
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/skins"
-            className="text-sm font-medium text-primary hover:underline"
-          >
-            Edit Loadout
-          </Link>
-        </div>
-        
-        {skinsEquipped > 0 && (
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-            {Object.entries(skinLoadout).slice(0, 5).map(([weaponId, skin]) => (
-              <div 
-                key={weaponId}
-                className="flex-shrink-0 w-20 h-14 bg-muted rounded-lg overflow-hidden relative"
-              >
-                <Image
-                  src={skin.skin_image}
-                  alt={skin.skin_name}
-                  fill
-                  className="object-contain p-1"
-                  unoptimized
-                />
-              </div>
-            ))}
-            {skinsEquipped > 5 && (
-              <div className="flex-shrink-0 w-20 h-14 bg-muted rounded-lg flex items-center justify-center">
-                <span className="text-sm font-medium text-muted-foreground">
-                  +{skinsEquipped - 5}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Submit */}
-      <Button
-        type="submit"
-        size="lg"
-        className="w-full"
-        disabled={isSubmitting}
-      >
-        {isSubmitting ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Creating Lobby...
-          </>
-        ) : (
-          "Create Lobby"
-        )}
-      </Button>
-    </form>
+    </div>
   )
 }
