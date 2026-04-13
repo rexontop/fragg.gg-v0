@@ -49,7 +49,7 @@ function extractSteamID(claimedID: string): string | null {
 
 async function getSteamUserInfo(steamID: string) {
   if (!STEAM_API_KEY) {
-    console.error("STEAM_API_KEY is missing from secrets.")
+    console.error("STEAM_API_KEY is not set in Supabase Secrets")
     return null
   }
 
@@ -63,7 +63,12 @@ async function getSteamUserInfo(steamID: string) {
     }
   )
 
-  const data = await response.json() as { response: { players: Array<{ personaname: string; avatarfull: string }> } }
+  const data = await response.json() as { 
+    response: { 
+      players: Array<{ personaname: string; avatarfull: string }> 
+    } 
+  }
+  
   const players = data.response.players
   if (players && players.length > 0) {
     return {
@@ -88,9 +93,11 @@ Deno.serve(async (req: Request) => {
     const params = url.searchParams
     const pathname = url.pathname
 
-    // LOGIN ROUTE: Now using .endsWith() to fix the 404 error
-    if (req.method === "GET" && pathname.endsWith("/steam-auth")) {
+    // --- LOGIN ROUTE ---
+    // Fixed: Using .includes to handle how Supabase prefixes the path
+    if (req.method === "GET" && pathname.includes("steam-auth") && !pathname.includes("verify")) {
       const returnTo = params.get("return_to") || `https://fragg.xyz/auth/callback`
+      
       const loginParams = new URLSearchParams()
       loginParams.append("openid.ns", "http://specs.openid.net/auth/2.0")
       loginParams.append("openid.identity", "http://specs.openid.net/auth/2.0/identifier_select")
@@ -98,17 +105,15 @@ Deno.serve(async (req: Request) => {
       loginParams.append("openid.mode", "checkid_setup")
       loginParams.append("openid.return_to", returnTo)
       loginParams.append("openid.realm", new URL(returnTo).origin)
-      loginParams.append("openid.response_nonce", new Date().toISOString())
-      loginParams.append("openid.assoc_handle", "{HMAC-SHA1}{" + Date.now() + "}{random}")
 
       const loginUrl = `${STEAM_API_URL}?${loginParams.toString()}`
 
-      // DIRECT REDIRECT: Fixed about:blank by sending user directly
+      // DIRECT REDIRECT: This fixes the about:blank issue
       return Response.redirect(loginUrl, 302)
     }
 
-    // VERIFY ROUTE: Using .endsWith() for reliability
-    if (req.method === "POST" && pathname.endsWith("/verify")) {
+    // --- VERIFY ROUTE ---
+    if (req.method === "POST" && pathname.includes("verify")) {
       const body = await req.json() as Record<string, unknown>
       const openidParams = new URLSearchParams()
 
@@ -123,10 +128,7 @@ Deno.serve(async (req: Request) => {
       if (!isValid) {
         return new Response(
           JSON.stringify({ error: "Steam verification failed" }),
-          {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         )
       }
 
@@ -136,10 +138,7 @@ Deno.serve(async (req: Request) => {
       if (!steamID) {
         return new Response(
           JSON.stringify({ error: "Invalid Steam ID" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         )
       }
 
@@ -148,10 +147,7 @@ Deno.serve(async (req: Request) => {
       if (!userInfo) {
         return new Response(
           JSON.stringify({ error: "Failed to retrieve Steam user info" }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         )
       }
 
@@ -161,15 +157,13 @@ Deno.serve(async (req: Request) => {
           username: userInfo.username,
           avatar: userInfo.avatar,
         }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
 
-    // The Fallback that was triggering in your screenshot
+    // --- 404 FALLBACK ---
     return new Response(
-      JSON.stringify({ error: "Not found", path: pathname }),
+      JSON.stringify({ error: "Not found", receivedPath: pathname }),
       {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
